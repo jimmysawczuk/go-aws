@@ -1,6 +1,6 @@
-# aws.go
+# go-aws
 
-**aws.go** is a basic, high-level library to access the Amazon AWS API. Right now, it only works with S3.
+**go-aws** is a basic, high-level library to access the Amazon AWS API. Right now, it only works with S3.
 
 ## Getting started
 
@@ -36,11 +36,11 @@ url, err := client.GetURL(bucket, file_name, expires_in)
 
 ## Installation
 
-Install this package by typing `go get github.com/jimmysawczuk/aws` in your terminal. You can then use it in your import statement like so:
+Install this package by typing `go get github.com/jimmysawczuk/go-aws` in your terminal. You can then use it in your import statement like so:
 
 ```go
 import (
-	"github.com/jimmysawczuk/aws"
+	"github.com/jimmysawczuk/go-aws"
 )
 ```
 
