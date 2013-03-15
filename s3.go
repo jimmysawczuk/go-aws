@@ -10,9 +10,6 @@ import (
 	"encoding/base64"
 	"time"
 
-	// content hash
-	// "crypto/md5"
-
 	// making request
 	"crypto/tls"
 	"net/http"
@@ -41,12 +38,14 @@ type S3Request struct {
 	signature string
 }
 
+// Creates a new S3Client using the AWS information in the Client
 func (c Client) NewS3() S3Client {
 	s := S3Client{key: c.key, secret: c.secret}
 	return s
 }
 
-func (s S3Client) Get(bucket, file_name string) (*bytes.Buffer, *http.Response, error) {
+// Performs an authenticated GET request on file_name in bucket.
+func (s *S3Client) Get(bucket, file_name string) (*bytes.Buffer, *http.Response, error) {
 
 	s3_req := S3Request{
 		verb:         "GET",
@@ -56,11 +55,13 @@ func (s S3Client) Get(bucket, file_name string) (*bytes.Buffer, *http.Response, 
 		signing_uri:  "/" + bucket + "/" + file_name,
 	}
 
-	s3_req.sign(&s, false)
+	s3_req.sign(s, false)
 	return s3_req.do()
 }
 
-func (s S3Client) GetURL(bucket, file_name string, expires string) (string, error) {
+// Gets an expiring URL for `file_name` in `bucket`, that expires in `expires`. `expires` should
+// be parseable by `time.ParseDuration`.
+func (s *S3Client) GetURL(bucket, file_name string, expires string) (string, error) {
 
 	expires_duration, err := time.ParseDuration(expires)
 	if err != nil {
@@ -77,7 +78,7 @@ func (s S3Client) GetURL(bucket, file_name string, expires string) (string, erro
 		signing_uri:  "/" + bucket + "/" + file_name,
 	}
 
-	signature := s3_req.sign(&s, true)
+	signature := s3_req.sign(s, true)
 
 	vals := url.Values{
 		"AWSAccessKeyId": []string{s.key},
@@ -90,7 +91,8 @@ func (s S3Client) GetURL(bucket, file_name string, expires string) (string, erro
 	return url, nil
 }
 
-func (s S3Client) Put(bucket, file_name, content_type string, content []byte) (*bytes.Buffer, *http.Response, error) {
+// Uploads `content` of type `content_type` to `file_name` in `bucket`.
+func (s *S3Client) Put(bucket, file_name, content_type string, content []byte) (*bytes.Buffer, *http.Response, error) {
 
 	s3_req := S3Request{
 		verb:         "PUT",
@@ -103,7 +105,7 @@ func (s S3Client) Put(bucket, file_name, content_type string, content []byte) (*
 		content:      content,
 	}
 
-	s3_req.sign(&s, false)
+	s3_req.sign(s, false)
 	return s3_req.do()
 }
 

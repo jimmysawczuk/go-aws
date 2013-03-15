@@ -36,10 +36,10 @@ url, err := client.GetURL(bucket, file_name, expires_in)
 
 ## Installation
 
-Install this package by typing `go install github.com/jimmysawczuk/aws` in your terminal. You can then use it in your import statement like so:
+Install this package by typing `go get github.com/jimmysawczuk/aws` in your terminal. You can then use it in your import statement like so:
 
 ```go
-import(
+import (
 	"github.com/jimmysawczuk/aws"
 )
 ```
