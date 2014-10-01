@@ -1,3 +1,5 @@
+[ ![Codeship Status for jimmysawczuk/go-aws](https://codeship.io/projects/6607f8d0-2b35-0132-392a-122cbd15e841/status)](https://codeship.io/projects/38504)
+
 # go-aws
 
 **go-aws** is a basic, high-level library to access the Amazon AWS API. Right now, it only works with S3.
