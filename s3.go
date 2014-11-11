@@ -2,6 +2,7 @@ package aws
 
 import (
 	"bytes"
+	"fmt"
 	"strconv"
 
 	// related to signing request
@@ -16,26 +17,29 @@ import (
 	"net/url"
 )
 
+var RootURL string = "s3.amazonaws.com"
+
 type S3Client struct {
 	key    string
 	secret string
 }
 
 type S3Request struct {
-	verb string
+	Verb string
 
-	request_uri  string
-	request_host string
+	URI  string
+	Host string
+
+	Headers     http.Header
+	ContentType string
+
+	Content []byte
 
 	content_md5  string
-	content_type string
 	request_time time.Time
-
-	content []byte
-
-	signing_uri string
-
-	signature string
+	signing_uri  string
+	signature    string
+	client       *S3Client
 }
 
 // Creates a new S3Client using the AWS information in the Client
@@ -44,19 +48,31 @@ func (c Client) NewS3() S3Client {
 	return s
 }
 
+func (s *S3Client) NewS3Request(verb, bucket, file_name string) (S3Request, error) {
+	req := S3Request{
+		Verb: verb,
+		URI:  "/" + file_name,
+		Host: "https://" + bucket + "." + RootURL,
+
+		request_time: time.Now(),
+		signing_uri:  "/" + bucket + "/" + file_name,
+		client:       s,
+	}
+
+	req.sign(false)
+
+	return req, nil
+}
+
 // Performs an authenticated GET request on file_name in bucket.
 func (s *S3Client) Get(bucket, file_name string) (*bytes.Buffer, *http.Response, error) {
 
-	s3_req := S3Request{
-		verb:         "GET",
-		request_uri:  "/" + file_name,
-		request_host: "https://" + bucket + ".s3.amazonaws.com",
-		request_time: time.Now(),
-		signing_uri:  "/" + bucket + "/" + file_name,
+	req, err := s.NewS3Request("GET", bucket, file_name)
+	if err != nil {
+		return nil, nil, fmt.Errorf("Error creating GET request: %s", err)
 	}
 
-	s3_req.sign(s, false)
-	return s3_req.do()
+	return req.Exec()
 }
 
 // Gets an expiring URL for `file_name` in `bucket`, that expires in `expires`. `expires` should
@@ -70,15 +86,17 @@ func (s *S3Client) GetURL(bucket, file_name string, expires string) (string, err
 
 	expires_time := time.Now().Add(expires_duration)
 
-	s3_req := S3Request{
-		verb:         "GET",
-		request_uri:  "/" + file_name,
-		request_host: "https://" + bucket + ".s3.amazonaws.com",
+	req := S3Request{
+		Verb: "GET",
+		URI:  "/" + file_name,
+		Host: "https://" + bucket + ".s3.amazonaws.com",
+
 		request_time: expires_time,
 		signing_uri:  "/" + bucket + "/" + file_name,
+		client:       s,
 	}
 
-	signature := s3_req.sign(s, true)
+	signature := req.sign(true)
 
 	vals := url.Values{
 		"AWSAccessKeyId": []string{s.key},
@@ -86,7 +104,7 @@ func (s *S3Client) GetURL(bucket, file_name string, expires string) (string, err
 		"Signature":      []string{signature},
 	}
 
-	url := s3_req.request_host + s3_req.request_uri + "?" + vals.Encode()
+	url := req.Host + req.URI + "?" + vals.Encode()
 
 	return url, nil
 }
@@ -94,35 +112,33 @@ func (s *S3Client) GetURL(bucket, file_name string, expires string) (string, err
 // Uploads `content` of type `content_type` to `file_name` in `bucket`.
 func (s *S3Client) Put(bucket, file_name, content_type string, content []byte) (*bytes.Buffer, *http.Response, error) {
 
-	s3_req := S3Request{
-		verb:         "PUT",
-		request_uri:  "/" + file_name,
-		request_host: "https://" + bucket + ".s3.amazonaws.com",
-		request_time: time.Now(),
-		signing_uri:  "/" + bucket + "/" + file_name,
-
-		content_type: content_type,
-		content:      content,
+	req, err := s.NewS3Request("PUT", bucket, file_name)
+	if err != nil {
+		return nil, nil, fmt.Errorf("Error creating PUT request: %s", err)
 	}
 
-	s3_req.sign(s, false)
-	return s3_req.do()
+	req.ContentType = content_type
+	req.Content = content
+
+	req.sign(false)
+
+	return req.Exec()
 }
 
-func (req *S3Request) sign(c *S3Client, use_unix bool) string {
+func (req *S3Request) sign(use_unix bool) string {
 
 	formatted_time := req.request_time.Format(time.RFC1123Z)
 	if use_unix {
 		formatted_time = strconv.FormatInt(req.request_time.Unix(), 10)
 	}
 
-	string_to_sign := req.verb + "\n" +
+	string_to_sign := req.Verb + "\n" +
 		req.content_md5 + "\n" +
-		req.content_type + "\n" +
+		req.ContentType + "\n" +
 		formatted_time + "\n" +
 		req.signing_uri
 
-	hash := hmac.New(sha1.New, bytes.NewBufferString(c.secret).Bytes())
+	hash := hmac.New(sha1.New, bytes.NewBufferString(req.client.secret).Bytes())
 
 	buf := bytes.NewBufferString(string_to_sign)
 
@@ -131,12 +147,16 @@ func (req *S3Request) sign(c *S3Client, use_unix bool) string {
 	encoder := base64.StdEncoding
 	result := encoder.EncodeToString(hash.Sum([]byte{}))
 
-	req.signature = c.key + ":" + result
+	req.signature = req.client.key + ":" + result
 
 	return result
 }
 
-func (s3_req *S3Request) do() (buf *bytes.Buffer, resp *http.Response, err error) {
+func (this *S3Request) Exec() (buf *bytes.Buffer, resp *http.Response, err error) {
+
+	if this.signature == "" {
+		this.sign(false)
+	}
 
 	buf = new(bytes.Buffer)
 
@@ -145,17 +165,23 @@ func (s3_req *S3Request) do() (buf *bytes.Buffer, resp *http.Response, err error
 	client := http.DefaultClient
 	client.Transport = tr
 
-	content_buffer := bytes.NewBuffer(s3_req.content)
+	content_buffer := bytes.NewBuffer(this.Content)
 
-	req, err := http.NewRequest(s3_req.verb, s3_req.request_host+s3_req.request_uri, content_buffer)
+	req, err := http.NewRequest(this.Verb, this.Host+this.URI, content_buffer)
 	if err != nil {
 		return
 	}
 
-	req.Header.Add("Authorization", "AWS "+s3_req.signature)
-	req.Header.Add("Date", s3_req.request_time.Format(time.RFC1123Z))
-	if s3_req.content_type != "" {
-		req.Header.Add("Content-Type", s3_req.content_type)
+	req.Header.Add("Authorization", "AWS "+this.signature)
+	req.Header.Add("Date", this.request_time.Format(time.RFC1123Z))
+	if this.ContentType != "" {
+		req.Header.Add("Content-Type", this.ContentType)
+	}
+
+	for header, vals := range this.Headers {
+		for _, val := range vals {
+			req.Header.Add(header, val)
+		}
 	}
 
 	resp, err = client.Do(req)
