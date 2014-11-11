@@ -57,6 +57,8 @@ func (s *S3Client) NewS3Request(verb, bucket, file_name string) (S3Request, erro
 		request_time: time.Now(),
 		signing_uri:  "/" + bucket + "/" + file_name,
 		client:       s,
+
+		Headers: make(http.Header),
 	}
 
 	req.sign(false)
