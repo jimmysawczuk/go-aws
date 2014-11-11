@@ -1,6 +1,7 @@
 package aws
 
 import (
+	"net/http"
 	"testing"
 	"time"
 )
@@ -51,6 +52,36 @@ func TestQueryStringSignature(t *testing.T) {
 	correct_signature := "NpgCjnDzrM+WFzoENXmpNDUsSn8="
 
 	if signature != correct_signature {
+		t.Fail()
+	}
+}
+
+func TestPutWithHeaders(t *testing.T) {
+	request_time, _ := time.Parse("Mon, 2 Jan 2006 15:04:05 -0700", "Tue, 27 Mar 2007 19:36:42 +0000")
+
+	req := S3Request{
+		Verb: "PUT",
+		URI:  "/photos/puppy.jpg",
+		Host: "https://johnsmith.s3.amazonaws.com",
+
+		request_time: request_time,
+		signing_uri:  "/johnsmith/photos/puppy.jpg.gz",
+		client:       &sample_s3_client,
+
+		ContentType: "image/jpeg",
+		Content:     []byte("hello, world"),
+
+		Headers: http.Header{
+			"Content-Encoding": []string{"gzip"},
+		},
+	}
+
+	signature := req.sign(false)
+
+	correct_signature := "yaq0CosnkNUgQ0aciRRgEyKtz3c="
+
+	if signature != correct_signature {
+		t.Errorf(signature)
 		t.Fail()
 	}
 }

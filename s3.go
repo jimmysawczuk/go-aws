@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"strconv"
+	"strings"
 
 	// related to signing request
 	"crypto/hmac"
@@ -60,8 +61,6 @@ func (s *S3Client) NewS3Request(verb, bucket, file_name string) (S3Request, erro
 
 		Headers: make(http.Header),
 	}
-
-	req.sign(false)
 
 	return req, nil
 }
@@ -134,10 +133,20 @@ func (req *S3Request) sign(use_unix bool) string {
 		formatted_time = strconv.FormatInt(req.request_time.Unix(), 10)
 	}
 
+	canonical_headers := ""
+	if len(req.Headers) > 0 {
+		for header, values := range req.Headers {
+			if strings.HasPrefix(strings.ToLower(header), "x-amz-") {
+				canonical_headers += strings.ToLower(header) + ":" + strings.ToLower(strings.Join(values, ",")) + "\n"
+			}
+		}
+	}
+
 	string_to_sign := req.Verb + "\n" +
 		req.content_md5 + "\n" +
 		req.ContentType + "\n" +
 		formatted_time + "\n" +
+		canonical_headers +
 		req.signing_uri
 
 	hash := hmac.New(sha1.New, bytes.NewBufferString(req.client.secret).Bytes())
