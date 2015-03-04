@@ -1,4 +1,4 @@
-[ ![Codeship Status for jimmysawczuk/go-aws](https://codeship.io/projects/6607f8d0-2b35-0132-392a-122cbd15e841/status)](https://codeship.io/projects/38504)
+[ ![travis-ci status for jimmysawczuk/go-aws](https://travis-ci.org/jimmysawczuk/go-aws.svg)](https://travis-ci.org/jimmysawczuk/go-aws)
 
 # go-aws
 
