@@ -23,6 +23,8 @@ var RootURL string = "s3.amazonaws.com"
 type S3Client struct {
 	key    string
 	secret string
+
+	http_client *http.Client
 }
 
 type S3Request struct {
@@ -45,7 +47,15 @@ type S3Request struct {
 
 // Creates a new S3Client using the AWS information in the Client
 func (c Client) NewS3() S3Client {
-	s := S3Client{key: c.key, secret: c.secret}
+	tr := &http.Transport{TLSClientConfig: &tls.Config{InsecureSkipVerify: true}}
+	client := http.DefaultClient
+	client.Transport = tr
+
+	s := S3Client{
+		key:         c.key,
+		secret:      c.secret,
+		http_client: client,
+	}
 	return s
 }
 
@@ -171,11 +181,6 @@ func (this *S3Request) Exec() (buf *bytes.Buffer, resp *http.Response, err error
 
 	buf = new(bytes.Buffer)
 
-	tr := &http.Transport{TLSClientConfig: &tls.Config{InsecureSkipVerify: true}}
-
-	client := http.DefaultClient
-	client.Transport = tr
-
 	content_buffer := bytes.NewBuffer(this.Content)
 
 	req, err := http.NewRequest(this.Verb, this.Host+this.URI, content_buffer)
@@ -195,7 +200,7 @@ func (this *S3Request) Exec() (buf *bytes.Buffer, resp *http.Response, err error
 		}
 	}
 
-	resp, err = client.Do(req)
+	resp, err = this.client.http_client.Do(req)
 	if err != nil {
 		return
 	}
